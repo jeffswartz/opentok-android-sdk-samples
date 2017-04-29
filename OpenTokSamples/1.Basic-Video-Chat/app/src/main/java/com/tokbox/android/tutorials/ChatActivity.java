@@ -18,51 +18,31 @@ import com.opentok.android.OpentokError;
 
 
 public class ChatActivity   extends ActionBarActivity
-                            implements  WebServiceCoordinator.Listener,
-                                        Session.SessionListener,
+                            implements  Session.SessionListener,
                                         PublisherKit.PublisherListener,
                                         SubscriberKit.SubscriberListener {
 
     private static final String LOG_TAG = ChatActivity.class.getSimpleName();
 
-    // Suppressing this warning. mWebServiceCoordinator will get GarbageCollected if it is local.
-    @SuppressWarnings("FieldCanBeLocal")
-    private WebServiceCoordinator mWebServiceCoordinator;
 
-    private String mApiKey;
-    private String mSessionId;
-    private String mToken;
+    // Replace with your OpenTok API key
+    private static final String API_KEY = "";
+    // Replace with a generated Session ID
+    private static final String SESSION_ID = "";
+    // Replace with a generated token (from the dashboard or using an OpenTok server SDK)
+    private static final String TOKEN = "";
     private Session mSession;
     private Publisher mPublisher;
     private Subscriber mSubscriber;
-
-    private FrameLayout mPublisherViewContainer;
-    private FrameLayout mSubscriberViewContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-        // initialize view objects from your layout
-        mPublisherViewContainer = (FrameLayout)findViewById(R.id.publisher_container);
-        mSubscriberViewContainer = (FrameLayout)findViewById(R.id.subscriber_container);
-
-        // If there is no server URL set
-        if(OpenTokConfig.CHAT_SERVER_URL == null) {
-            // use hard coded session values
-            mApiKey = OpenTokConfig.API_KEY;
-            mSessionId = OpenTokConfig.SESSION_ID;
-            mToken = OpenTokConfig.TOKEN;
-
-            initializeSession();
-            initializePublisher();
-        } else {
-            // otherwise initialize WebServiceCoordinator and kick off request for session data
-            // initialization occurs when data is returned
-            mWebServiceCoordinator = new WebServiceCoordinator(this, this);
-            mWebServiceCoordinator.fetchSessionConnectionData();
-        }
+        mSession = new Session.Builder(this, API_KEY, SESSION_ID).build();
+        mSession.setSessionListener(this);
+        mSession.connect(TOKEN);
     }
 
     @Override
@@ -87,29 +67,6 @@ public class ChatActivity   extends ActionBarActivity
         return super.onOptionsItemSelected(item);
     }
 
-    private void initializeSession() {
-        mSession = new Session.Builder(this, mApiKey, mSessionId).build();
-        mSession.setSessionListener(this);
-        mSession.connect(mToken);
-    }
-
-    private void initializePublisher() {
-        // initialize Publisher and set this object to listen to Publisher events
-        mPublisher = new Publisher.Builder(this).build();
-        mPublisher.setPublisherListener(this);
-
-        // set publisher video style to fill view
-        mPublisher.getRenderer().setStyle(BaseVideoRenderer.STYLE_VIDEO_SCALE,
-                BaseVideoRenderer.STYLE_VIDEO_FILL);
-        mPublisherViewContainer.addView(mPublisher.getView());
-    }
-
-    private void logOpenTokError(OpentokError opentokError) {
-        Log.e(LOG_TAG, "Error Domain: " + opentokError.getErrorDomain().name());
-        Log.e(LOG_TAG, "Error Code: " + opentokError.getErrorCode().name());
-    }
-
-
     /* Activity lifecycle methods */
 
     @Override
@@ -132,32 +89,19 @@ public class ChatActivity   extends ActionBarActivity
         }
     }
 
-    /* Web Service Coordinator delegate methods */
-
-    @Override
-    public void onSessionConnectionDataReady(String apiKey, String sessionId, String token) {
-        mApiKey = apiKey;
-        mSessionId = sessionId;
-        mToken = token;
-
-        initializeSession();
-        initializePublisher();
-    }
-
-    @Override
-    public void onWebServiceCoordinatorError(Exception error) {
-        Log.e(LOG_TAG, "Web Service error: " + error.getMessage());
-    }
-
-    /* Session Listener methods */
-
+    /* SessionListener methods */
     @Override
     public void onConnected(Session session) {
         Log.i(LOG_TAG, "Session Connected");
 
-        if (mPublisher != null) {
-            mSession.publish(mPublisher);
-        }
+        // initialize Publisher and set this object to listen to Publisher events
+        mPublisher = new Publisher.Builder(this).build();
+        mPublisher.setPublisherListener(this);
+
+        LayoutParams layoutParams = new LayoutParams(200, 150);
+        this.getWindow().addContentView(mPublisher.getView(), layoutParams);
+
+        mSession.publish(mPublisher);
     }
 
     @Override
@@ -172,8 +116,6 @@ public class ChatActivity   extends ActionBarActivity
         if (mSubscriber == null) {
             mSubscriber = new Subscriber.Builder(this, stream).build();
             mSubscriber.setSubscriberListener(this);
-            mSubscriber.getRenderer().setStyle(BaseVideoRenderer.STYLE_VIDEO_SCALE,
-                    BaseVideoRenderer.STYLE_VIDEO_FILL);
             mSession.subscribe(mSubscriber);
         }
     }
@@ -184,13 +126,13 @@ public class ChatActivity   extends ActionBarActivity
 
         if (mSubscriber != null) {
             mSubscriber = null;
-            mSubscriberViewContainer.removeAllViews();
+            // mSubscriberViewContainer.removeAllViews();
         }
     }
 
     @Override
     public void onError(Session session, OpentokError opentokError) {
-        logOpenTokError(opentokError);
+        Log.e(LOG_TAG, "Session error: " + opentokError.getMessage());
     }
 
     /* Publisher Listener methods */
@@ -207,25 +149,26 @@ public class ChatActivity   extends ActionBarActivity
 
     @Override
     public void onError(PublisherKit publisherKit, OpentokError opentokError) {
-        logOpenTokError(opentokError);
+        Log.e(LOG_TAG, "Publisher error: " + opentokError.getMessage());
     }
 
     /* Subscriber Listener methods */
 
     @Override
-    public void onConnected(SubscriberKit subscriberKit) {
+    public void onConnected(SubscriberKit subscriber) {
         Log.i(LOG_TAG, "Subscriber Connected");
 
-        mSubscriberViewContainer.addView(mSubscriber.getView());
+        LayoutParams layoutParams = new LayoutParams(400, 300);
+        this.getWindow().addContentView(subscriber.getView(), layoutParams);
     }
 
     @Override
-    public void onDisconnected(SubscriberKit subscriberKit) {
+    public void onDisconnected(SubscriberKit subscriber) {
         Log.i(LOG_TAG, "Subscriber Disconnected");
     }
 
     @Override
-    public void onError(SubscriberKit subscriberKit, OpentokError opentokError) {
-        logOpenTokError(opentokError);
+    public void onError(SubscriberKit subscriber, OpentokError opentokError) {
+        Log.e(LOG_TAG, "Subscriber error: " + opentokError.getMessage());
     }
 }
